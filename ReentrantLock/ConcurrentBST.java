@@ -14,6 +14,27 @@ public class ConcurrentBST {
     private Node root;
     private final ReentrantLock lock = new ReentrantLock(true);  // Fair mode
 
+    // Intentional corruption method as required
+    public void corruptNode(int targetValue, int newValue) {
+        lock.lock();
+        try {
+            Node node = findNode(root, targetValue);
+            if (node != null) {
+                // Directly change the value without maintaining BST property
+                node.value = newValue;
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    // Helper method to find a node with a specific value
+    private Node findNode(Node node, int value) {
+        if (node == null) return null;
+        if (node.value == value) return node;
+        if (value < node.value) return findNode(node.left, value);
+        return findNode(node.right, value);
+    }
 
     public void add(int value) {
         lock.lock();
