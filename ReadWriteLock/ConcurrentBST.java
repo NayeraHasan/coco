@@ -4,27 +4,61 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 class Node {
     int value;
     Node left, right;
+    // Lock for fine-grained concurrency at node level
+    final ReadWriteLock lock;
 
     Node(int value) {
         this.value = value;
         left = right = null;
+        // Use a fair lock to prevent starvation
+        this.lock = new ReentrantReadWriteLock(true);
     }
 }
 
 public class ConcurrentBST {
     private Node root;
-    private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
+    // Tree-level lock for operations that need to lock the whole tree
+    private final ReadWriteLock treeLock = new ReentrantReadWriteLock(true); // Fair lock to prevent starvation
+
+    // Intentional corruption method as required
+    public void corruptNode(int targetValue, int newValue) {
+        String thread = Thread.currentThread().getName();
+        Logger.log(thread, "WRITE", "corrupt", "trying", targetValue + "->" + newValue);
+        treeLock.writeLock().lock();
+        try {
+            Logger.log(thread, "WRITE", "corrupt", "acquired", targetValue + "->" + newValue);
+            Node node = findNode(root, targetValue);
+            if (node != null) {
+                // Directly change the value without maintaining BST property
+                node.value = newValue;
+                Logger.log(thread, "WRITE", "corrupt", "corrupted", targetValue + "->" + newValue);
+            }
+        } finally {
+            treeLock.writeLock().unlock();
+            Logger.log(thread, "WRITE", "corrupt", "released", targetValue + "->" + newValue);
+        }
+    }
+
+    // Helper method to find a node with a specific value
+    private Node findNode(Node node, int value) {
+        if (node == null) return null;
+        if (node.value == value) return node;
+        if (value < node.value) return findNode(node.left, value);
+        return findNode(node.right, value);
+    }
 
     // WRITE: Add
     public void add(int value) {
         String thread = Thread.currentThread().getName();
         Logger.log(thread, "WRITE", "add", "trying", String.valueOf(value));
-        rwLock.writeLock().lock();
+        
+        // Use simple tree-level locking for now - can be optimized later
+        treeLock.writeLock().lock();
         try {
             Logger.log(thread, "WRITE", "add", "acquired", String.valueOf(value));
             root = insert(root, value);
         } finally {
-            rwLock.writeLock().unlock();
+            treeLock.writeLock().unlock();
             Logger.log(thread, "WRITE", "add", "released", String.valueOf(value));
         }
     }
@@ -40,12 +74,13 @@ public class ConcurrentBST {
     public void remove(int value) {
         String thread = Thread.currentThread().getName();
         Logger.log(thread, "WRITE", "remove", "trying", String.valueOf(value));
-        rwLock.writeLock().lock();
+        
+        treeLock.writeLock().lock();
         try {
             Logger.log(thread, "WRITE", "remove", "acquired", String.valueOf(value));
             root = delete(root, value);
         } finally {
-            rwLock.writeLock().unlock();
+            treeLock.writeLock().unlock();
             Logger.log(thread, "WRITE", "remove", "released", String.valueOf(value));
         }
     }
@@ -65,20 +100,22 @@ public class ConcurrentBST {
     }
 
     private Node minValueNode(Node node) {
-        while (node.left != null) node = node.left;
-        return node;
+        Node current = node;
+        while (current.left != null) current = current.left;
+        return current;
     }
 
     // READ: Contains
     public boolean contains(int value) {
         String thread = Thread.currentThread().getName();
         Logger.log(thread, "READ", "contains", "trying", String.valueOf(value));
-        rwLock.readLock().lock();
+        
+        treeLock.readLock().lock();
         try {
             Logger.log(thread, "READ", "contains", "acquired", String.valueOf(value));
             return search(root, value);
         } finally {
-            rwLock.readLock().unlock();
+            treeLock.readLock().unlock();
             Logger.log(thread, "READ", "contains", "released", String.valueOf(value));
         }
     }
@@ -93,13 +130,13 @@ public class ConcurrentBST {
     public void printInOrder() {
         String thread = Thread.currentThread().getName();
         Logger.log(thread, "READ", "printInOrder", "trying", "-");
-        rwLock.readLock().lock();
+        treeLock.readLock().lock();
         try {
             Logger.log(thread, "READ", "printInOrder", "acquired", "-");
             inOrder(root);
             System.out.println();
         } finally {
-            rwLock.readLock().unlock();
+            treeLock.readLock().unlock();
             Logger.log(thread, "READ", "printInOrder", "released", "-");
         }
     }
@@ -115,12 +152,12 @@ public class ConcurrentBST {
     public boolean checkRep() {
         String thread = Thread.currentThread().getName();
         Logger.log(thread, "READ", "checkRep", "trying", "-");
-        rwLock.readLock().lock();
+        treeLock.readLock().lock();
         try {
             Logger.log(thread, "READ", "checkRep", "acquired", "-");
             return isBST(root, Integer.MIN_VALUE, Integer.MAX_VALUE);
         } finally {
-            rwLock.readLock().unlock();
+            treeLock.readLock().unlock();
             Logger.log(thread, "READ", "checkRep", "released", "-");
         }
     }
