@@ -1,5 +1,7 @@
 # Concurrent Binary Search Tree Implementation
 
+## Team: Nayera Hasan ; Jean Rojas
+
 This project implements a thread-safe Binary Search Tree (BST) using Read-Write Locks to handle concurrent operations efficiently.
 
 ## Binary Search Tree Overview
